@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Flower Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Flowers">
+  <!-- v2: smaller edit/delete btns, taller log btn, confetti, GitHub push, 8 flowers -->
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --green: #3a7d44;
+      --green-light: #e8f5e9;
+      --text: #1a1a1a;
+      --text-muted: #6b7280;
+      --border: #e5e7eb;
+      --bg: #ffffff;
+      --card-radius: 12px;
+      --header-h: 56px;
+      --nav-h: 60px;
+    }
+
+    html, body { height: 100%; background: var(--bg); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--text); }
+
+    /* ---- HEADER ---- */
+    #header {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; z-index: 100;
+    }
+    #header-title { font-size: 17px; font-weight: 600; }
+    #header-title.large { font-size: 26px; font-weight: 700; }
+    .header-btn {
+      width: 36px; height: 36px; border: none; background: none;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      border-radius: 8px; color: var(--text);
+    }
+    #add-btn {
+      width: 36px; height: 36px; border: none; background: var(--green);
+      color: white; border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 22px;
+      box-shadow: 0 2px 8px rgba(58,125,68,0.35);
+    }
+
+    /* ---- SEARCH ---- */
+    #search-wrap {
+      position: fixed; top: var(--header-h); left: 0; right: 0;
+      padding: 8px 12px; background: var(--bg); z-index: 99;
+    }
+    #search-input {
+      width: 100%; padding: 9px 14px 9px 36px; border: none;
+      background: #f3f4f6; border-radius: 10px; font-size: 15px; color: var(--text);
+      outline: none;
+    }
+    .search-icon {
+      position: absolute; left: 22px; top: 50%; transform: translateY(-50%);
+      color: #9ca3af; pointer-events: none;
+    }
+
+    /* ---- MAIN SCROLL AREA ---- */
+    #main {
+      position: fixed; top: calc(var(--header-h) + 52px); bottom: var(--nav-h);
+      left: 0; right: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+
+    /* ---- FLOWER GRID ---- */
+    #flowers-view { display: block; }
+    #flowers-view.hidden, #sightings-view.hidden { display: none; }
+
+    .flower-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; padding: 10px;
+    }
+
+    .flower-card {
+      background: var(--bg); border-radius: var(--card-radius);
+      overflow: hidden; cursor: pointer; position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      transition: transform 0.1s, box-shadow 0.1s;
+      user-select: none;
+    }
+    .flower-card:active { transform: scale(0.97); box-shadow: 0 0 0 rgba(0,0,0,0); }
+
+    .card-photo {
+      width: 100%; aspect-ratio: 4/3; object-fit: cover;
+      display: block; background: #e5e7eb;
+    }
+    .card-photo-placeholder {
+      width: 100%; aspect-ratio: 4/3; display: flex;
+      align-items: center; justify-content: center; font-size: 36px;
+    }
+
+    .card-info { padding: 5px 7px 8px; }
+    .card-name { font-size: 12px; font-weight: 600; line-height: 1.2; }
+    .card-count {
+      font-size: 10px; color: var(--text-muted); margin-top: 1px;
+    }
+
+    /* SMALLER menu button - reduces accidental tap risk */
+    .card-menu-btn {
+      position: absolute; top: 6px; right: 6px;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: rgba(255,255,255,0.85); border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: #555; backdrop-filter: blur(4px);
+      letter-spacing: -1px;
+    }
+
+    .empty-state {
+      text-align: center; padding: 60px 24px; color: var(--text-muted);
+    }
+    .empty-state .big-icon { font-size: 56px; margin-bottom: 12px; }
+    .empty-state p { font-size: 15px; }
+
+    /* ---- SIGHTINGS VIEW ---- */
+    #sightings-view { padding: 12px; }
+
+    .sightings-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 12px;
+    }
+    .sightings-header h2 { font-size: 18px; font-weight: 700; }
+    #push-btn {
+      background: var(--green); color: white; border: none;
+      padding: 7px 14px; border-radius: 20px; font-size: 13px;
+      font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 5px;
+    }
+    #push-btn:disabled { background: #9ca3af; }
+
+    .sighting-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border);
+    }
+    .sighting-thumb {
+      width: 48px; height: 48px; border-radius: 10px;
+      object-fit: cover; flex-shrink: 0; background: #e5e7eb;
+    }
+    .sighting-thumb-placeholder {
+      width: 48px; height: 48px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; font-size: 24px;
+      flex-shrink: 0;
+    }
+    .sighting-info { flex: 1; }
+    .sighting-name { font-size: 15px; font-weight: 600; }
+    .sighting-date { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+    .sighting-delete {
+      background: none; border: none; color: #d1d5db; cursor: pointer;
+      padding: 4px; font-size: 18px;
+    }
+    .sighting-delete:active { color: #ef4444; }
+
+    /* ---- BOTTOM NAV ---- */
+    #bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h);
+      background: var(--bg); border-top: 1px solid var(--border);
+      display: flex; z-index: 100;
+    }
+    .nav-tab {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; cursor: pointer; gap: 3px;
+      border: none; background: none; color: #9ca3af; font-size: 11px;
+      font-weight: 500; padding-bottom: env(safe-area-inset-bottom);
+    }
+    .nav-tab.active { color: var(--green); }
+    .nav-tab svg { width: 24px; height: 24px; }
+
+    /* ---- BOTTOM SHEET (flower detail) ---- */
+    #sheet-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.25);
+      z-index: 200; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    #sheet-overlay.show { opacity: 1; pointer-events: all; }
+
+    #detail-sheet {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--bg); border-radius: 20px 20px 0 0;
+      z-index: 201; padding: 0 0 calc(env(safe-area-inset-bottom) + 24px);
+      transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.32,0.72,0,1);
+      max-height: 85vh; overflow-y: auto;
+    }
+    #detail-sheet.show { transform: translateY(0); }
+
+    .sheet-handle {
+      width: 36px; height: 4px; background: #d1d5db; border-radius: 2px;
+      margin: 12px auto 0;
+    }
+
+    #sheet-photo {
+      width: 100%; max-height: 220px; object-fit: cover;
+      display: block; background: #e5e7eb;
+    }
+    #sheet-photo-placeholder {
+      width: 100%; height: 180px; display: flex;
+      align-items: center; justify-content: center; font-size: 80px;
+    }
+
+    .sheet-body { padding: 16px 20px; }
+    #sheet-name { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+    #sheet-stats { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+
+    /* 2x TALLER log button */
+    #log-btn {
+      width: 100%; padding: 28px 15px; background: var(--green); color: white;
+      border: none; border-radius: 14px; font-size: 20px; font-weight: 700;
+      cursor: pointer; margin-bottom: 12px;
+      transition: background 0.15s, transform 0.1s;
+      letter-spacing: 0.3px;
+    }
+    #log-btn:active { background: #2d5f35; transform: scale(0.98); }
+    #log-btn.just-logged { background: #6b7280; }
+
+    /* SMALLER edit/delete buttons */
+    .sheet-actions { display: flex; gap: 8px; }
+    .sheet-secondary-btn {
+      flex: 1; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 10px; font-size: 13px; font-weight: 500;
+      cursor: pointer; background: var(--bg); color: var(--text);
+    }
+
+    /* ---- MODAL (add/edit flower) ---- */
+    #modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.3);
+      z-index: 300; display: flex; align-items: flex-end;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #modal-overlay.show { opacity: 1; pointer-events: all; }
+
+    #flower-modal {
+      width: 100%; background: var(--bg);
+      border-radius: 20px 20px 0 0;
+      padding: 0 20px calc(env(safe-area-inset-bottom) + 20px);
+      transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.32,0.72,0,1);
+      max-height: 90vh; overflow-y: auto;
+    }
+    #flower-modal.show { transform: translateY(0); }
+
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 0 16px;
+    }
+    .modal-header h2 { font-size: 18px; font-weight: 700; }
+    .modal-close {
+      width: 30px; height: 30px; border-radius: 50%; background: #f3f4f6;
+      border: none; cursor: pointer; font-size: 16px; color: #555;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; color: #374151; }
+    .form-input {
+      width: 100%; padding: 12px 14px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 15px; color: var(--text); background: var(--bg);
+      outline: none; transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: var(--green); }
+
+    .photo-input-wrap { position: relative; }
+    .photo-input-label {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 14px; border: 1.5px dashed var(--border);
+      border-radius: 10px; cursor: pointer; color: var(--text-muted); font-size: 15px;
+    }
+    .photo-input-label:has(+ input:focus) { border-color: var(--green); }
+    #photo-preview {
+      width: 100%; max-height: 160px; object-fit: cover;
+      border-radius: 10px; margin-top: 8px; display: none;
+    }
+    #photo-input { display: none; }
+
+    .form-actions { display: flex; gap: 10px; margin-top: 4px; }
+    .btn-cancel {
+      flex: 1; padding: 14px; border: 1.5px solid var(--border);
+      border-radius: 12px; font-size: 16px; font-weight: 600;
+      cursor: pointer; background: var(--bg); color: var(--text);
+    }
+    .btn-submit {
+      flex: 2; padding: 14px; border: none; background: var(--green);
+      color: white; border-radius: 12px; font-size: 16px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .btn-submit:active { background: #2d5f35; }
+    .btn-submit:disabled { background: #9ca3af; }
+
+    /* ---- CONTEXT MENU ---- */
+    #ctx-menu {
+      position: fixed; background: var(--bg); border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.18); z-index: 400;
+      min-width: 160px; overflow: hidden; display: none;
+    }
+    .ctx-item {
+      padding: 13px 16px; font-size: 15px; cursor: pointer; display: block;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .ctx-item:hover { background: #f9fafb; }
+    .ctx-item.danger { color: #ef4444; }
+
+    /* ---- GITHUB SETTINGS MODAL ---- */
+    #settings-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.3);
+      z-index: 500; display: flex; align-items: flex-end;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #settings-overlay.show { opacity: 1; pointer-events: all; }
+    #settings-modal {
+      width: 100%; background: var(--bg); border-radius: 20px 20px 0 0;
+      padding: 0 20px calc(env(safe-area-inset-bottom) + 20px);
+      transform: translateY(100%); transition: transform 0.28s cubic-bezier(0.32,0.72,0,1);
+    }
+    #settings-modal.show { transform: translateY(0); }
+    .settings-note {
+      font-size: 13px; color: var(--text-muted); background: #f9fafb;
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; line-height: 1.5;
+    }
+
+    /* ---- TOAST ---- */
+    #toast {
+      position: fixed; bottom: calc(var(--nav-h) + 12px); left: 50%;
+      transform: translateX(-50%) translateY(20px); background: #1a1a1a;
+      color: white; padding: 10px 18px; border-radius: 20px; font-size: 14px;
+      font-weight: 500; z-index: 600; opacity: 0; transition: all 0.25s;
+      white-space: nowrap; pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ---- CONFETTI ---- */
+    #confetti-canvas {
+      position: fixed; inset: 0; z-index: 700; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <button class="header-btn" onclick="toggleSettings()" aria-label="GitHub settings" title="GitHub settings">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+    </svg>
+  </button>
+  <span id="header-title">Flowers</span>
+  <button id="add-btn" onclick="openAddModal()" aria-label="Add flower">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
+</div>
+
+<!-- SEARCH -->
+<div id="search-wrap" style="position:relative">
+  <span class="search-icon">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+    </svg>
+  </span>
+  <input id="search-input" type="search" placeholder="Search" oninput="renderFlowers()" autocomplete="off">
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <!-- FLOWERS TAB -->
+  <div id="flowers-view">
+    <div class="flower-grid" id="flower-grid"></div>
+  </div>
+
+  <!-- SIGHTINGS TAB -->
+  <div id="sightings-view" class="hidden">
+    <div class="sightings-header">
+      <h2>Sightings log</h2>
+      <button id="push-btn" onclick="pushToGitHub()">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+        Push to GitHub
+      </button>
+    </div>
+    <div id="sightings-list"></div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav id="bottom-nav">
+  <button class="nav-tab active" id="tab-flowers" onclick="switchTab('flowers')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <path d="M12 2C8 2 5 5 5 9c0 3.5 2.5 6.5 7 9 4.5-2.5 7-5.5 7-9 0-4-3-7-7-7z"/>
+      <circle cx="12" cy="9" r="2" fill="currentColor" stroke="none"/>
+    </svg>
+    Flowers
+  </button>
+  <button class="nav-tab" id="tab-sightings" onclick="switchTab('sightings')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7" stroke-dasharray="2 3"/>
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/>
+    </svg>
+    Sightings
+  </button>
+</nav>
+
+<!-- SHEET OVERLAY -->
+<div id="sheet-overlay" onclick="closeSheet()"></div>
+
+<!-- FLOWER DETAIL BOTTOM SHEET -->
+<div id="detail-sheet">
+  <div class="sheet-handle"></div>
+  <div id="sheet-photo-placeholder"></div>
+  <img id="sheet-photo" src="" alt="" style="display:none">
+  <div class="sheet-body">
+    <div id="sheet-name"></div>
+    <div id="sheet-stats"></div>
+    <button id="log-btn" onclick="logSighting()">&#10003; Seen today</button>
+    <div class="sheet-actions">
+      <button class="sheet-secondary-btn" onclick="openEditModal()">Edit flower</button>
+      <button class="sheet-secondary-btn" style="color:#ef4444" onclick="deleteFlowerFromSheet()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL OVERLAY -->
+<div id="modal-overlay" onclick="handleModalOverlayClick(event)">
+  <div id="flower-modal">
+    <div class="modal-header">
+      <h2 id="modal-title">Add flower</h2>
+      <button class="modal-close" onclick="closeModal()">&#10005;</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input id="input-name" class="form-input" type="text" placeholder="e.g. Bluebell" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Photo</label>
+      <div class="photo-input-wrap">
+        <label class="photo-input-label" for="photo-input">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="6" width="18" height="14" rx="2"/>
+            <circle cx="12" cy="13" r="3"/>
+            <path d="M8 6l1.5-2h5L16 6"/>
+          </svg>
+          Choose an image...
+        </label>
+        <input id="photo-input" type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)">
+        <img id="photo-preview" alt="preview">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input id="input-notes" class="form-input" type="text" placeholder="Where to find it, bloom time...">
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-submit" id="modal-submit" onclick="submitFlower()">Add flower</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+  <button class="ctx-item" onclick="ctxEdit()">Edit</button>
+  <button class="ctx-item danger" onclick="ctxDelete()">Delete</button>
+</div>
+
+<!-- GITHUB SETTINGS MODAL -->
+<div id="settings-overlay" onclick="handleSettingsOverlayClick(event)">
+  <div id="settings-modal">
+    <div class="modal-header">
+      <h2>GitHub sync</h2>
+      <button class="modal-close" onclick="closeSettings()">&#10005;</button>
+    </div>
+    <div class="settings-note">
+      Push sightings.csv to a GitHub repo. You need a <strong>Personal Access Token</strong> with <code>repo</code> scope.<br>
+      Get one at github.com &#8594; Settings &#8594; Developer settings &#8594; Personal access tokens.
+    </div>
+    <div class="form-group">
+      <label class="form-label">GitHub username</label>
+      <input id="input-gh-owner" class="form-input" type="text" placeholder="e.g. DataStrategist" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Repo name</label>
+      <input id="input-gh-repo" class="form-input" type="text" placeholder="e.g. flower-tracker" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Personal Access Token</label>
+      <input id="input-gh-token" class="form-input" type="password" placeholder="ghp_..." autocomplete="off">
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeSettings()">Cancel</button>
+      <button class="btn-submit" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- CONFETTI CANVAS -->
+<canvas id="confetti-canvas"></canvas>
+
+<script>
+// ---- DATA ----
+const STORE_KEY = 'flowerTracker_v3'; // bumped - forces fresh defaults with photos
+const FLOWER_COLORS = [
+  'linear-gradient(135deg,#a78bfa,#7c3aed)',
+  'linear-gradient(135deg,#f6d365,#fda085)',
+  'linear-gradient(135deg,#6ee7b7,#059669)',
+  'linear-gradient(135deg,#fda085,#f97316)',
+  'linear-gradient(135deg,#f9a8d4,#ec4899)',
+  'linear-gradient(135deg,#67e8f9,#0891b2)',
+  'linear-gradient(135deg,#fbbf24,#d97706)',
+  'linear-gradient(135deg,#a5b4fc,#4f46e5)',
+];
+const FLOWER_EMOJI = ['🌸','🌼','🌺','🌻','🪷','💐','🌸','🌼'];
+
+const DEFAULT_FLOWERS = [
+  {id:'f1', name:'Early Crocus',    color:0, notes:'Jan-Mar, woodland edges',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/Early_crocus.jpg/400px-Early_crocus.jpg'},
+  {id:'f2', name:'Spring Crocus',   color:5, notes:'Feb-Apr, grassland and parks',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Crocus_vernus_bgiu.jpg/400px-Crocus_vernus_bgiu.jpg'},
+  {id:'f3', name:'Daisy',           color:1, notes:'Mar-Sept, lawns and meadows',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Bellis_perennis_white_%28aka%29.jpg/400px-Bellis_perennis_white_%28aka%29.jpg'},
+  {id:'f4', name:'Daffodil',        color:6, notes:'Feb-Apr, gardens and meadows',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Narcissus_pseudonarcissus.jpg/400px-Narcissus_pseudonarcissus.jpg'},
+  {id:'f5', name:'Cherry',          color:4, notes:'Mar-Apr, blossom on branches',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/CherryBlossoms.JPG/400px-CherryBlossoms.JPG'},
+  {id:'f6', name:'Lesser Celandine',color:1, notes:'Feb-May, damp shade and roadsides',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Ficaria_verna_LC0062.jpg/400px-Ficaria_verna_LC0062.jpg'},
+  {id:'f7', name:'Plum',            color:4, notes:'Feb-Mar, white blossom, hedgerows',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Prunus_cerasifera1.jpg/400px-Prunus_cerasifera1.jpg'},
+  {id:'f8', name:'Iris',            color:7, notes:'Apr-Jun, gardens and riverbanks',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Simple_iris.jpg/400px-Simple_iris.jpg'},
+];
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { flowers: DEFAULT_FLOWERS.map(f => ({...f})), sightings: [] };
+}
+
+function saveData() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(db)); }
+  catch(e) { showToast('Storage full - export your data!'); }
+}
+
+let db = loadData();
+let activeTab = 'flowers';
+let currentFlowerId = null;
+let editingFlowerId = null;
+let pendingPhotoData = null;
+let ctxFlowerId = null;
+
+// ---- RENDERING ----
+function getFlowerColor(flower) {
+  return FLOWER_COLORS[flower.color % FLOWER_COLORS.length];
+}
+function getFlowerEmoji(flower) {
+  return FLOWER_EMOJI[flower.color % FLOWER_EMOJI.length];
+}
+
+function getSightingCount(flowerId) {
+  return db.sightings.filter(s => s.flower_id === flowerId).length;
+}
+
+function getLastSeen(flowerId) {
+  const s = db.sightings.filter(s => s.flower_id === flowerId);
+  if (!s.length) return null;
+  return s[s.length - 1].date;
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function renderFlowers() {
+  const query = document.getElementById('search-input').value.toLowerCase();
+  const grid = document.getElementById('flower-grid');
+  const flowers = db.flowers.filter(f => f.name.toLowerCase().includes(query));
+
+  if (!flowers.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="big-icon">🌱</div>
+      <p>${query ? 'No flowers match your search' : 'Tap + to add your first flower'}</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = flowers.map(f => {
+    const count = getSightingCount(f.id);
+    const photoHtml = f.photo
+      ? `<img class="card-photo" src="${f.photo}" alt="${f.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    const placeholderStyle = f.photo ? 'display:none' : '';
+    return `
+      <div class="flower-card" onclick="openSheet('${f.id}')">
+        ${photoHtml}
+        <div class="card-photo-placeholder" style="${placeholderStyle};background:${getFlowerColor(f)}">
+          ${getFlowerEmoji(f)}
+        </div>
+        <div class="card-info">
+          <div class="card-name">${escHtml(f.name)}</div>
+          <div class="card-count">${count ? `Seen ${count} time${count===1?'':'s'}` : 'Not yet seen'}</div>
+        </div>
+        <button class="card-menu-btn" onclick="openCtxMenu(event,'${f.id}')">•••</button>
+      </div>`;
+  }).join('');
+}
+
+function renderSightings() {
+  const list = document.getElementById('sightings-list');
+  const sightings = [...db.sightings].reverse();
+
+  if (!sightings.length) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="big-icon">👁️</div>
+      <p>No sightings yet - go find some flowers!</p>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = sightings.map((s, i) => {
+    const flower = db.flowers.find(f => f.id === s.flower_id);
+    const realIdx = db.sightings.length - 1 - i;
+    const thumb = flower?.photo
+      ? `<img class="sighting-thumb" src="${flower.photo}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    const placeholderStyle = flower?.photo ? 'display:none' : '';
+    const bg = flower ? getFlowerColor(flower) : '#e5e7eb';
+    const emoji = flower ? getFlowerEmoji(flower) : '🌸';
+    return `
+      <div class="sighting-item">
+        ${thumb}
+        <div class="sighting-thumb-placeholder" style="${placeholderStyle};background:${bg}">${emoji}</div>
+        <div class="sighting-info">
+          <div class="sighting-name">${escHtml(s.flower_name)}</div>
+          <div class="sighting-date">${formatDate(s.date)}</div>
+        </div>
+        <button class="sighting-delete" onclick="deleteSighting(${realIdx})" title="Delete">×</button>
+      </div>`;
+  }).join('');
+}
+
+function deleteSighting(idx) {
+  db.sightings.splice(idx, 1);
+  saveData();
+  renderSightings();
+  renderFlowers();
+}
+
+// ---- TABS ----
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('flowers-view').classList.toggle('hidden', tab !== 'flowers');
+  document.getElementById('sightings-view').classList.toggle('hidden', tab !== 'sightings');
+  document.getElementById('add-btn').style.display = tab === 'flowers' ? 'flex' : 'none';
+  document.getElementById('search-wrap').style.display = tab === 'flowers' ? 'block' : 'none';
+  document.getElementById('tab-flowers').classList.toggle('active', tab === 'flowers');
+  document.getElementById('tab-sightings').classList.toggle('active', tab === 'sightings');
+  document.getElementById('header-title').textContent = tab === 'flowers' ? 'Flowers' : 'Sightings';
+  if (tab === 'sightings') renderSightings();
+}
+
+// ---- DETAIL SHEET ----
+function openSheet(id) {
+  currentFlowerId = id;
+  const flower = db.flowers.find(f => f.id === id);
+  if (!flower) return;
+
+  const count = getSightingCount(id);
+  const last = getLastSeen(id);
+
+  document.getElementById('sheet-name').textContent = flower.name;
+  document.getElementById('sheet-stats').textContent =
+    count ? `Seen ${count} time${count===1?'':'s'}${last ? ' · Last: ' + formatDate(last) : ''}` : 'Not yet recorded this season';
+
+  const photoEl = document.getElementById('sheet-photo');
+  const placeholderEl = document.getElementById('sheet-photo-placeholder');
+
+  if (flower.photo) {
+    photoEl.src = flower.photo;
+    photoEl.style.display = 'block';
+    placeholderEl.style.display = 'none';
+  } else {
+    photoEl.style.display = 'none';
+    placeholderEl.style.cssText = `background:${getFlowerColor(flower)};width:100%;height:180px;display:flex;align-items:center;justify-content:center;font-size:80px`;
+    placeholderEl.textContent = getFlowerEmoji(flower);
+  }
+
+  const logBtn = document.getElementById('log-btn');
+  logBtn.textContent = '✓ Seen today';
+  logBtn.classList.remove('just-logged');
+
+  document.getElementById('sheet-overlay').classList.add('show');
+  document.getElementById('detail-sheet').classList.add('show');
+  closeCtxMenu();
+}
+
+function closeSheet() {
+  document.getElementById('sheet-overlay').classList.remove('show');
+  document.getElementById('detail-sheet').classList.remove('show');
+  currentFlowerId = null;
+}
+
+function logSighting() {
+  if (!currentFlowerId) return;
+  const flower = db.flowers.find(f => f.id === currentFlowerId);
+  if (!flower) return;
+
+  db.sightings.push({
+    flower_id: flower.id,
+    flower_name: flower.name,
+    date: new Date().toISOString()
+  });
+  saveData();
+
+  const count = getSightingCount(currentFlowerId);
+  document.getElementById('sheet-stats').textContent =
+    `Seen ${count} time${count===1?'':'s'} · Last: just now`;
+
+  const btn = document.getElementById('log-btn');
+  btn.textContent = '✓ Logged!';
+  btn.classList.add('just-logged');
+
+  renderFlowers();
+  launchConfetti();
+
+  // Auto-close and return to flowers tab after 1.8s
+  setTimeout(() => {
+    closeSheet();
+    if (activeTab !== 'flowers') switchTab('flowers');
+  }, 1800);
+}
+
+// ---- CONFETTI ----
+function launchConfetti() {
+  const canvas = document.getElementById('confetti-canvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const COLORS = ['#3a7d44','#f6d365','#fda085','#a78bfa','#f9a8d4','#67e8f9','#fbbf24','#ec4899'];
+  const particles = Array.from({length: 90}, () => ({
+    x: Math.random() * canvas.width,
+    y: canvas.height * 0.6,
+    r: 5 + Math.random() * 7,
+    vx: (Math.random() - 0.5) * 9,
+    vy: -(10 + Math.random() * 14),
+    gravity: 0.5,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    angle: Math.random() * Math.PI * 2,
+    spin: (Math.random() - 0.5) * 0.3,
+    alpha: 1,
+  }));
+  let frame = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      p.vy += p.gravity; p.x += p.vx; p.y += p.vy;
+      p.angle += p.spin; p.alpha -= 0.014;
+      if (p.alpha <= 0) return;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.alpha);
+      ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.r/2, -p.r/4, p.r, p.r/2);
+      ctx.restore();
+    });
+    frame++;
+    if (frame < 100 && particles.some(p => p.alpha > 0)) requestAnimationFrame(draw);
+    else ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+  draw();
+}
+
+// ---- ADD / EDIT MODAL ----
+function openAddModal() {
+  editingFlowerId = null;
+  pendingPhotoData = null;
+  document.getElementById('modal-title').textContent = 'Add flower';
+  document.getElementById('modal-submit').textContent = 'Add flower';
+  document.getElementById('input-name').value = '';
+  document.getElementById('input-notes').value = '';
+  document.getElementById('photo-preview').style.display = 'none';
+  document.getElementById('photo-preview').src = '';
+  document.querySelector('.photo-input-label').querySelector('span') && null;
+  showModal();
+}
+
+function openEditModal() {
+  if (!currentFlowerId) return;
+  const flower = db.flowers.find(f => f.id === currentFlowerId);
+  if (!flower) return;
+  editingFlowerId = currentFlowerId;
+  pendingPhotoData = flower.photo || null;
+  document.getElementById('modal-title').textContent = 'Edit flower';
+  document.getElementById('modal-submit').textContent = 'Save changes';
+  document.getElementById('input-name').value = flower.name;
+  document.getElementById('input-notes').value = flower.notes || '';
+  const preview = document.getElementById('photo-preview');
+  if (flower.photo) { preview.src = flower.photo; preview.style.display = 'block'; }
+  else { preview.style.display = 'none'; }
+  closeSheet();
+  showModal();
+}
+
+function showModal() {
+  document.getElementById('modal-overlay').classList.add('show');
+  document.getElementById('flower-modal').classList.add('show');
+  setTimeout(() => document.getElementById('input-name').focus(), 300);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+  document.getElementById('flower-modal').classList.remove('show');
+}
+
+function handleModalOverlayClick(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+function handlePhotoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    // Compress via canvas
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const MAX = 600;
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > MAX) { h = h * MAX / w; w = MAX; } }
+      else { if (h > MAX) { w = w * MAX / h; h = MAX; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      pendingPhotoData = canvas.toDataURL('image/jpeg', 0.75);
+      const preview = document.getElementById('photo-preview');
+      preview.src = pendingPhotoData;
+      preview.style.display = 'block';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function submitFlower() {
+  const name = document.getElementById('input-name').value.trim();
+  if (!name) { document.getElementById('input-name').focus(); return; }
+
+  if (editingFlowerId) {
+    const flower = db.flowers.find(f => f.id === editingFlowerId);
+    if (flower) {
+      flower.name = name;
+      flower.notes = document.getElementById('input-notes').value.trim();
+      if (pendingPhotoData !== null) flower.photo = pendingPhotoData;
+      // Update sighting names
+      db.sightings.filter(s => s.flower_id === editingFlowerId)
+        .forEach(s => s.flower_name = name);
+    }
+    showToast('Flower updated');
+  } else {
+    const usedColors = db.flowers.map(f => f.color);
+    let color = 0;
+    for (let i = 0; i < FLOWER_COLORS.length; i++) {
+      if (!usedColors.includes(i)) { color = i; break; }
+      color = (db.flowers.length) % FLOWER_COLORS.length;
+    }
+    db.flowers.push({
+      id: 'f' + Date.now(),
+      name,
+      photo: pendingPhotoData || '',
+      notes: document.getElementById('input-notes').value.trim(),
+      color
+    });
+    showToast(`${name} added!`);
+  }
+
+  saveData();
+  renderFlowers();
+  closeModal();
+}
+
+// ---- CONTEXT MENU ----
+function openCtxMenu(e, id) {
+  e.stopPropagation();
+  ctxFlowerId = id;
+  const menu = document.getElementById('ctx-menu');
+  menu.style.display = 'block';
+  const rect = e.currentTarget.getBoundingClientRect();
+  let left = rect.left - 120;
+  if (left < 8) left = 8;
+  menu.style.left = left + 'px';
+  menu.style.top = (rect.bottom + 4) + 'px';
+  setTimeout(() => document.addEventListener('click', closeCtxMenu, {once:true}), 0);
+}
+
+function closeCtxMenu() {
+  document.getElementById('ctx-menu').style.display = 'none';
+}
+
+function ctxEdit() {
+  closeCtxMenu();
+  openSheet(ctxFlowerId);
+  setTimeout(() => openEditModal(), 100);
+}
+
+function ctxDelete() {
+  closeCtxMenu();
+  const flower = db.flowers.find(f => f.id === ctxFlowerId);
+  if (!flower) return;
+  if (!confirm(`Delete "${flower.name}"? This will also remove all its sightings.`)) return;
+  db.flowers = db.flowers.filter(f => f.id !== ctxFlowerId);
+  db.sightings = db.sightings.filter(s => s.flower_id !== ctxFlowerId);
+  saveData();
+  renderFlowers();
+  showToast('Flower deleted');
+}
+
+function deleteFlowerFromSheet() {
+  if (!currentFlowerId) return;
+  const flower = db.flowers.find(f => f.id === currentFlowerId);
+  if (!flower) return;
+  if (!confirm(`Delete "${flower.name}"? This will also remove all its sightings.`)) return;
+  db.flowers = db.flowers.filter(f => f.id !== currentFlowerId);
+  db.sightings = db.sightings.filter(s => s.flower_id !== currentFlowerId);
+  saveData();
+  renderFlowers();
+  closeSheet();
+  showToast('Flower deleted');
+}
+
+// ---- GITHUB SETTINGS ----
+function toggleSettings() {
+  const gh = JSON.parse(localStorage.getItem('ghSettings')||'{}');
+  document.getElementById('input-gh-owner').value = gh.owner || '';
+  document.getElementById('input-gh-repo').value  = gh.repo  || '';
+  document.getElementById('input-gh-token').value = gh.token || '';
+  document.getElementById('settings-overlay').classList.add('show');
+  document.getElementById('settings-modal').classList.add('show');
+}
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('show');
+  document.getElementById('settings-modal').classList.remove('show');
+}
+function handleSettingsOverlayClick(e) {
+  if (e.target === document.getElementById('settings-overlay')) closeSettings();
+}
+function saveSettings() {
+  const owner = document.getElementById('input-gh-owner').value.trim();
+  const repo  = document.getElementById('input-gh-repo').value.trim();
+  const token = document.getElementById('input-gh-token').value.trim();
+  if (!owner || !repo || !token) { showToast('Fill in all three fields'); return; }
+  localStorage.setItem('ghSettings', JSON.stringify({owner, repo, token}));
+  closeSettings();
+  showToast('GitHub settings saved!');
+}
+
+// ---- GITHUB PUSH ----
+async function pushToGitHub() {
+  const gh = JSON.parse(localStorage.getItem('ghSettings')||'{}');
+  if (!gh.owner || !gh.repo || !gh.token) {
+    showToast('Configure GitHub first (\u2699 icon top-left)');
+    return;
+  }
+  if (!db.sightings.length) { showToast('No sightings to push yet'); return; }
+  const btn = document.getElementById('push-btn');
+  btn.textContent = 'Pushing...';
+  btn.disabled = true;
+  try {
+    const rows = ['flower_id,flower_name,date']
+      .concat(db.sightings.map(s => `${s.flower_id},"${s.flower_name.replace(/"/g,'""')}",${s.date}`))
+      .join('\n');
+    const content = btoa(unescape(encodeURIComponent(rows)));
+    const apiBase = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/sightings.csv`;
+    const headers = {
+      'Authorization': `token ${gh.token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    };
+    let sha;
+    const getRes = await fetch(apiBase, {headers});
+    if (getRes.ok) { sha = (await getRes.json()).sha; }
+    const body = {
+      message: `Update sightings - ${new Date().toLocaleDateString('en-GB')}`,
+      content,
+      ...(sha ? {sha} : {}),
+    };
+    const putRes = await fetch(apiBase, {method:'PUT', headers, body: JSON.stringify(body)});
+    if (!putRes.ok) { const e = await putRes.json(); throw new Error(e.message || putRes.status); }
+    showToast(`\u2713 Pushed ${db.sightings.length} sightings`);
+  } catch(e) {
+    showToast(`Push failed: ${e.message}`);
+  } finally {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg> Push to GitHub';
+    btn.disabled = false;
+  }
+}
+
+// ---- TOAST ----
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ---- KEYBOARD ----
+document.getElementById('input-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitFlower();
+});
+
+// ---- INIT ----
+renderFlowers();
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
