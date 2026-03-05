@@ -216,13 +216,7 @@
     #log-btn:active { background: #2d5f35; transform: scale(0.98); }
     #log-btn.just-logged { background: #6b7280; }
 
-    /* SMALLER edit/delete buttons */
-    .sheet-actions { display: flex; gap: 8px; }
-    .sheet-secondary-btn {
-      flex: 1; padding: 8px 12px; border: 1px solid var(--border);
-      border-radius: 10px; font-size: 13px; font-weight: 500;
-      cursor: pointer; background: var(--bg); color: var(--text);
-    }
+    /* Edit/Delete live in the ••• card menu only */
 
     /* ---- MODAL (add/edit flower) ---- */
     #modal-overlay {
@@ -413,10 +407,6 @@
     <div id="sheet-name"></div>
     <div id="sheet-stats"></div>
     <button id="log-btn" onclick="logSighting()">&#10003; Seen today</button>
-    <div class="sheet-actions">
-      <button class="sheet-secondary-btn" onclick="openEditModal()">Edit flower</button>
-      <button class="sheet-secondary-btn" style="color:#ef4444" onclick="deleteFlowerFromSheet()">Delete</button>
-    </div>
   </div>
 </div>
 
@@ -442,7 +432,7 @@
           </svg>
           Choose an image...
         </label>
-        <input id="photo-input" type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)">
+        <input id="photo-input" type="file" accept="image/*" onchange="handlePhotoUpload(event)">
         <img id="photo-preview" alt="preview">
       </div>
     </div>
@@ -916,19 +906,6 @@ function ctxDelete() {
   db.sightings = db.sightings.filter(s => s.flower_id !== ctxFlowerId);
   saveData();
   renderFlowers();
-  showToast('Flower deleted');
-}
-
-function deleteFlowerFromSheet() {
-  if (!currentFlowerId) return;
-  const flower = db.flowers.find(f => f.id === currentFlowerId);
-  if (!flower) return;
-  if (!confirm(`Delete "${flower.name}"? This will also remove all its sightings.`)) return;
-  db.flowers = db.flowers.filter(f => f.id !== currentFlowerId);
-  db.sightings = db.sightings.filter(s => s.flower_id !== currentFlowerId);
-  saveData();
-  renderFlowers();
-  closeSheet();
   showToast('Flower deleted');
 }
 
