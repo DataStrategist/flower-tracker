@@ -313,6 +313,38 @@
       border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; line-height: 1.5;
     }
 
+    /* ---- IMPORT BANNER ---- */
+    #import-banner {
+      margin: 10px 10px 0;
+      background: #f0fdf4; border: 1.5px solid #bbf7d0;
+      border-radius: 14px; padding: 12px 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    #import-banner.hidden { display: none; }
+    .import-banner-text { flex: 1; font-size: 13px; color: #166534; line-height: 1.4; }
+    .import-banner-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+    .import-banner-btn {
+      background: var(--green); color: white; border: none;
+      padding: 8px 14px; border-radius: 20px; font-size: 13px;
+      font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+    .import-banner-dismiss {
+      width: 24px; height: 24px; border: none; background: none;
+      color: #6b7280; cursor: pointer; font-size: 16px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    /* share/import row in settings */
+    .settings-actions {
+      display: flex; gap: 10px; margin-bottom: 16px;
+    }
+    .settings-action-btn {
+      flex: 1; padding: 12px 8px; border: 1.5px solid var(--border);
+      border-radius: 12px; font-size: 14px; font-weight: 600;
+      cursor: pointer; background: var(--bg); color: var(--text);
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .settings-action-btn span { font-size: 22px; }
+
     /* ---- TOAST ---- */
     #toast {
       position: fixed; bottom: calc(var(--nav-h) + 12px); left: 50%;
@@ -354,13 +386,24 @@
       <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
     </svg>
   </span>
-  <input id="search-input" type="search" placeholder="Search" oninput="renderFlowers()" autocomplete="off">
+  <input id="search-input" type="search" placeholder="Search" oninput="renderGrid()" autocomplete="off">
 </div>
+
+<!-- IMPORT FILE INPUT (hidden) -->
+<input id="import-input" type="file" accept=".json,application/json" style="display:none" onchange="handleImportFile(event)">
 
 <!-- MAIN -->
 <div id="main">
   <!-- FLOWERS TAB -->
   <div id="flowers-view">
+    <div id="import-banner" class="hidden">
+      <div class="import-banner-text">
+        <strong>Got a friend's list?</strong>
+        Import their flowers &amp; animals in one tap.
+      </div>
+      <button class="import-banner-btn" onclick="document.getElementById('import-input').click()">Import</button>
+      <button class="import-banner-dismiss" onclick="dismissImportBanner()" title="Dismiss">×</button>
+    </div>
     <div class="flower-grid" id="flower-grid"></div>
   </div>
 
@@ -385,6 +428,16 @@
       <circle cx="12" cy="9" r="2" fill="currentColor" stroke="none"/>
     </svg>
     Flowers
+  </button>
+  <button class="nav-tab" id="tab-animals" onclick="switchTab('animals')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="16.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="4" cy="13" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="20" cy="13" r="1.5" fill="currentColor" stroke="none"/>
+      <ellipse cx="12" cy="17" rx="5" ry="4"/>
+    </svg>
+    Animals
   </button>
   <button class="nav-tab" id="tab-sightings" onclick="switchTab('sightings')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -419,7 +472,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Name</label>
-      <input id="input-name" class="form-input" type="text" placeholder="e.g. Bluebell" autocomplete="off">
+      <input id="input-name" class="form-input" type="text" placeholder="e.g. Bluebell / Robin" autocomplete="off">
     </div>
     <div class="form-group">
       <label class="form-label">Photo</label>
@@ -438,11 +491,11 @@
     </div>
     <div class="form-group">
       <label class="form-label">Notes (optional)</label>
-      <input id="input-notes" class="form-input" type="text" placeholder="Where to find it, bloom time...">
+      <input id="input-notes" class="form-input" type="text" placeholder="Where to find it, when to spot it...">
     </div>
     <div class="form-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-submit" id="modal-submit" onclick="submitFlower()">Add flower</button>
+      <button class="btn-submit" id="modal-submit" onclick="submitItem()">Add flower</button>
     </div>
   </div>
 </div>
@@ -457,8 +510,16 @@
 <div id="settings-overlay" onclick="handleSettingsOverlayClick(event)">
   <div id="settings-modal">
     <div class="modal-header">
-      <h2>GitHub sync</h2>
+      <h2>Settings</h2>
       <button class="modal-close" onclick="closeSettings()">&#10005;</button>
+    </div>
+    <div class="settings-actions">
+      <button class="settings-action-btn" onclick="shareItems()">
+        <span>📤</span> Share list
+      </button>
+      <button class="settings-action-btn" onclick="document.getElementById('import-input').click();closeSettings()">
+        <span>📥</span> Import list
+      </button>
     </div>
     <div class="settings-note">
       Push sightings.csv to a GitHub repo. You need a <strong>Personal Access Token</strong> with <code>repo</code> scope.<br>
@@ -491,7 +552,8 @@
 
 <script>
 // ---- DATA ----
-const STORE_KEY = 'flowerTracker_v3'; // bumped - forces fresh defaults with photos
+const STORE_KEY = 'flowerTracker_v4';
+const OLD_STORE_KEY = 'flowerTracker_v3';
 const FLOWER_COLORS = [
   'linear-gradient(135deg,#a78bfa,#7c3aed)',
   'linear-gradient(135deg,#f6d365,#fda085)',
@@ -503,6 +565,26 @@ const FLOWER_COLORS = [
   'linear-gradient(135deg,#a5b4fc,#4f46e5)',
 ];
 const FLOWER_EMOJI = ['🌸','🌼','🌺','🌻','🪷','💐','🌸','🌼'];
+const ANIMAL_EMOJI  = ['🦊','🦔','🐿️','🦢','🐦','🦉','🦋','🐇'];
+
+const DEFAULT_ANIMALS = [
+  {id:'a1', kind:'animal', name:'Robin',         color:3, notes:'Year-round, gardens and woodland',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f3/Erithacus_rubecula_with_cocked_head.jpg/400px-Erithacus_rubecula_with_cocked_head.jpg'},
+  {id:'a2', kind:'animal', name:'Blue Tit',       color:5, notes:'Year-round, gardens and woodland',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Parus_caeruleus1.jpg/400px-Parus_caeruleus1.jpg'},
+  {id:'a3', kind:'animal', name:'Red Fox',         color:2, notes:'Year-round, urban and rural edges',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Fox_D32_at_Newlands_Corner.jpg/400px-Fox_D32_at_Newlands_Corner.jpg'},
+  {id:'a4', kind:'animal', name:'Hedgehog',        color:6, notes:'Mar-Nov, gardens and hedgerows',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Erinaceus_europaeus_LC0119.jpg/400px-Erinaceus_europaeus_LC0119.jpg'},
+  {id:'a5', kind:'animal', name:'Grey Squirrel',   color:0, notes:'Year-round, parks and woodland',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/2/27/EasternGraySquirrel_UML.jpg/400px-EasternGraySquirrel_UML.jpg'},
+  {id:'a6', kind:'animal', name:'Magpie',          color:7, notes:'Year-round, open country and gardens',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Common_magpie_%28Pica_pica%29.jpg/400px-Common_magpie_%28Pica_pica%29.jpg'},
+  {id:'a7', kind:'animal', name:'Wood Pigeon',     color:1, notes:'Year-round, widespread',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Columba_palumbus_0.jpg/400px-Columba_palumbus_0.jpg'},
+  {id:'a8', kind:'animal', name:'Badger',          color:4, notes:'Year-round, nocturnal, setts in woodland',
+   photo:'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Badger-badger.jpg/400px-Badger-badger.jpg'},
+];
 
 const DEFAULT_FLOWERS = [
   {id:'f1', name:'Early Crocus',    color:0, notes:'Jan-Mar, woodland edges',
@@ -528,7 +610,21 @@ function loadData() {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) return JSON.parse(raw);
   } catch(e) {}
-  return { flowers: DEFAULT_FLOWERS.map(f => ({...f})), sightings: [] };
+  // Migrate from v3
+  try {
+    const old = localStorage.getItem(OLD_STORE_KEY);
+    if (old) {
+      const oldData = JSON.parse(old);
+      const sightings = (oldData.sightings || []).map(s => ({
+        item_id:   s.flower_id   || s.item_id,
+        item_name: s.flower_name || s.item_name,
+        item_type: s.item_type   || 'flower',
+        date: s.date
+      }));
+      return { flowers: oldData.flowers || DEFAULT_FLOWERS.map(f => ({...f})), animals: DEFAULT_ANIMALS.map(a => ({...a})), sightings };
+    }
+  } catch(e) {}
+  return { flowers: DEFAULT_FLOWERS.map(f => ({...f})), animals: DEFAULT_ANIMALS.map(a => ({...a})), sightings: [] };
 }
 
 function saveData() {
@@ -538,6 +634,7 @@ function saveData() {
 
 let db = loadData();
 let activeTab = 'flowers';
+let activeMode = 'flowers'; // 'flowers' or 'animals'
 let currentFlowerId = null;
 let editingFlowerId = null;
 let pendingPhotoData = null;
@@ -547,16 +644,23 @@ let ctxFlowerId = null;
 function getFlowerColor(flower) {
   return FLOWER_COLORS[flower.color % FLOWER_COLORS.length];
 }
-function getFlowerEmoji(flower) {
-  return FLOWER_EMOJI[flower.color % FLOWER_EMOJI.length];
+function getItemEmoji(item) {
+  const arr = (item.kind === 'animal') ? ANIMAL_EMOJI : FLOWER_EMOJI;
+  return arr[item.color % arr.length];
+}
+function getActiveItems() {
+  return activeMode === 'animals' ? db.animals : db.flowers;
+}
+function findItem(id) {
+  return db.flowers.find(f => f.id === id) || db.animals.find(a => a.id === id);
 }
 
-function getSightingCount(flowerId) {
-  return db.sightings.filter(s => s.flower_id === flowerId).length;
+function getSightingCount(itemId) {
+  return db.sightings.filter(s => (s.item_id || s.flower_id) === itemId).length;
 }
 
-function getLastSeen(flowerId) {
-  const s = db.sightings.filter(s => s.flower_id === flowerId);
+function getLastSeen(itemId) {
+  const s = db.sightings.filter(s => (s.item_id || s.flower_id) === itemId);
   if (!s.length) return null;
   return s[s.length - 1].date;
 }
@@ -566,20 +670,22 @@ function formatDate(iso) {
   return d.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
 
-function renderFlowers() {
+function renderGrid() {
   const query = document.getElementById('search-input').value.toLowerCase();
   const grid = document.getElementById('flower-grid');
-  const flowers = db.flowers.filter(f => f.name.toLowerCase().includes(query));
+  const items = getActiveItems().filter(f => f.name.toLowerCase().includes(query));
+  const emptyIcon = activeMode === 'animals' ? '🐾' : '🌱';
+  const emptyLabel = activeMode === 'animals' ? 'animals' : 'flowers';
 
-  if (!flowers.length) {
+  if (!items.length) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-      <div class="big-icon">🌱</div>
-      <p>${query ? 'No flowers match your search' : 'Tap + to add your first flower'}</p>
+      <div class="big-icon">${emptyIcon}</div>
+      <p>${query ? `No ${emptyLabel} match your search` : `Tap + to add your first ${emptyLabel.slice(0,-1)}`}</p>
     </div>`;
     return;
   }
 
-  grid.innerHTML = flowers.map(f => {
+  grid.innerHTML = items.map(f => {
     const count = getSightingCount(f.id);
     const photoHtml = f.photo
       ? `<img class="card-photo" src="${f.photo}" alt="${f.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
@@ -589,7 +695,7 @@ function renderFlowers() {
       <div class="flower-card" onclick="openSheet('${f.id}')">
         ${photoHtml}
         <div class="card-photo-placeholder" style="${placeholderStyle};background:${getFlowerColor(f)}">
-          ${getFlowerEmoji(f)}
+          ${getItemEmoji(f)}
         </div>
         <div class="card-info">
           <div class="card-name">${escHtml(f.name)}</div>
@@ -607,26 +713,28 @@ function renderSightings() {
   if (!sightings.length) {
     list.innerHTML = `<div class="empty-state">
       <div class="big-icon">👁️</div>
-      <p>No sightings yet - go find some flowers!</p>
+      <p>No sightings yet - go find some wildlife!</p>
     </div>`;
     return;
   }
 
   list.innerHTML = sightings.map((s, i) => {
-    const flower = db.flowers.find(f => f.id === s.flower_id);
+    const sid   = s.item_id   || s.flower_id;
+    const sname = s.item_name || s.flower_name;
+    const item = findItem(sid);
     const realIdx = db.sightings.length - 1 - i;
-    const thumb = flower?.photo
-      ? `<img class="sighting-thumb" src="${flower.photo}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+    const thumb = item?.photo
+      ? `<img class="sighting-thumb" src="${item.photo}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
       : '';
-    const placeholderStyle = flower?.photo ? 'display:none' : '';
-    const bg = flower ? getFlowerColor(flower) : '#e5e7eb';
-    const emoji = flower ? getFlowerEmoji(flower) : '🌸';
+    const placeholderStyle = item?.photo ? 'display:none' : '';
+    const bg = item ? getFlowerColor(item) : '#e5e7eb';
+    const emoji = item ? getItemEmoji(item) : (s.item_type === 'animal' ? '🐾' : '🌸');
     return `
       <div class="sighting-item">
         ${thumb}
         <div class="sighting-thumb-placeholder" style="${placeholderStyle};background:${bg}">${emoji}</div>
         <div class="sighting-info">
-          <div class="sighting-name">${escHtml(s.flower_name)}</div>
+          <div class="sighting-name">${escHtml(sname)}</div>
           <div class="sighting-date">${formatDate(s.date)}</div>
         </div>
         <button class="sighting-delete" onclick="deleteSighting(${realIdx})" title="Delete">×</button>
@@ -638,26 +746,31 @@ function deleteSighting(idx) {
   db.sightings.splice(idx, 1);
   saveData();
   renderSightings();
-  renderFlowers();
+  renderGrid();
 }
 
 // ---- TABS ----
 function switchTab(tab) {
   activeTab = tab;
-  document.getElementById('flowers-view').classList.toggle('hidden', tab !== 'flowers');
+  const isGrid = tab === 'flowers' || tab === 'animals';
+  if (isGrid) activeMode = tab;
+  document.getElementById('flowers-view').classList.toggle('hidden', !isGrid);
   document.getElementById('sightings-view').classList.toggle('hidden', tab !== 'sightings');
-  document.getElementById('add-btn').style.display = tab === 'flowers' ? 'flex' : 'none';
-  document.getElementById('search-wrap').style.display = tab === 'flowers' ? 'block' : 'none';
+  document.getElementById('add-btn').style.display = isGrid ? 'flex' : 'none';
+  document.getElementById('search-wrap').style.display = isGrid ? 'block' : 'none';
   document.getElementById('tab-flowers').classList.toggle('active', tab === 'flowers');
+  document.getElementById('tab-animals').classList.toggle('active', tab === 'animals');
   document.getElementById('tab-sightings').classList.toggle('active', tab === 'sightings');
-  document.getElementById('header-title').textContent = tab === 'flowers' ? 'Flowers' : 'Sightings';
-  if (tab === 'sightings') renderSightings();
+  const titles = {flowers: 'Flowers', animals: 'Animals', sightings: 'Sightings'};
+  document.getElementById('header-title').textContent = titles[tab] || tab;
+  if (isGrid) renderGrid();
+  else renderSightings();
 }
 
 // ---- DETAIL SHEET ----
 function openSheet(id) {
   currentFlowerId = id;
-  const flower = db.flowers.find(f => f.id === id);
+  const flower = findItem(id);
   if (!flower) return;
 
   const count = getSightingCount(id);
@@ -677,7 +790,7 @@ function openSheet(id) {
   } else {
     photoEl.style.display = 'none';
     placeholderEl.style.cssText = `background:${getFlowerColor(flower)};width:100%;height:180px;display:flex;align-items:center;justify-content:center;font-size:80px`;
-    placeholderEl.textContent = getFlowerEmoji(flower);
+    placeholderEl.textContent = getItemEmoji(flower);
   }
 
   const logBtn = document.getElementById('log-btn');
@@ -697,12 +810,13 @@ function closeSheet() {
 
 function logSighting() {
   if (!currentFlowerId) return;
-  const flower = db.flowers.find(f => f.id === currentFlowerId);
+  const flower = findItem(currentFlowerId);
   if (!flower) return;
 
   db.sightings.push({
-    flower_id: flower.id,
-    flower_name: flower.name,
+    item_id:   flower.id,
+    item_name: flower.name,
+    item_type: flower.kind || 'flower',
     date: new Date().toISOString()
   });
   saveData();
@@ -715,13 +829,13 @@ function logSighting() {
   btn.textContent = '✓ Logged!';
   btn.classList.add('just-logged');
 
-  renderFlowers();
+  renderGrid();
   launchConfetti();
 
-  // Auto-close and return to flowers tab after 1.8s
+  // Auto-close and return to grid tab after 1.8s
   setTimeout(() => {
     closeSheet();
-    if (activeTab !== 'flowers') switchTab('flowers');
+    if (activeTab !== activeMode) switchTab(activeMode);
   }, 1800);
 }
 
@@ -769,8 +883,9 @@ function launchConfetti() {
 function openAddModal() {
   editingFlowerId = null;
   pendingPhotoData = null;
-  document.getElementById('modal-title').textContent = 'Add flower';
-  document.getElementById('modal-submit').textContent = 'Add flower';
+  const label = activeMode === 'animals' ? 'animal' : 'flower';
+  document.getElementById('modal-title').textContent = `Add ${label}`;
+  document.getElementById('modal-submit').textContent = `Add ${label}`;
   document.getElementById('input-name').value = '';
   document.getElementById('input-notes').value = '';
   document.getElementById('photo-preview').style.display = 'none';
@@ -781,11 +896,12 @@ function openAddModal() {
 
 function openEditModal() {
   if (!currentFlowerId) return;
-  const flower = db.flowers.find(f => f.id === currentFlowerId);
+  const flower = findItem(currentFlowerId);
   if (!flower) return;
   editingFlowerId = currentFlowerId;
   pendingPhotoData = flower.photo || null;
-  document.getElementById('modal-title').textContent = 'Edit flower';
+  const label = (flower.kind === 'animal') ? 'animal' : 'flower';
+  document.getElementById('modal-title').textContent = `Edit ${label}`;
   document.getElementById('modal-submit').textContent = 'Save changes';
   document.getElementById('input-name').value = flower.name;
   document.getElementById('input-notes').value = flower.notes || '';
@@ -836,30 +952,34 @@ function handlePhotoUpload(e) {
   reader.readAsDataURL(file);
 }
 
-function submitFlower() {
+function submitItem() {
   const name = document.getElementById('input-name').value.trim();
   if (!name) { document.getElementById('input-name').focus(); return; }
 
+  const arr  = activeMode === 'animals' ? db.animals : db.flowers;
+  const kind = activeMode === 'animals' ? 'animal' : 'flower';
+
   if (editingFlowerId) {
-    const flower = db.flowers.find(f => f.id === editingFlowerId);
-    if (flower) {
-      flower.name = name;
-      flower.notes = document.getElementById('input-notes').value.trim();
-      if (pendingPhotoData !== null) flower.photo = pendingPhotoData;
+    const item = findItem(editingFlowerId);
+    if (item) {
+      item.name = name;
+      item.notes = document.getElementById('input-notes').value.trim();
+      if (pendingPhotoData !== null) item.photo = pendingPhotoData;
       // Update sighting names
-      db.sightings.filter(s => s.flower_id === editingFlowerId)
-        .forEach(s => s.flower_name = name);
+      db.sightings.filter(s => (s.item_id || s.flower_id) === editingFlowerId)
+        .forEach(s => { s.item_name = name; s.flower_name = name; });
     }
-    showToast('Flower updated');
+    showToast(`${kind.charAt(0).toUpperCase() + kind.slice(1)} updated`);
   } else {
-    const usedColors = db.flowers.map(f => f.color);
+    const usedColors = arr.map(f => f.color);
     let color = 0;
     for (let i = 0; i < FLOWER_COLORS.length; i++) {
       if (!usedColors.includes(i)) { color = i; break; }
-      color = (db.flowers.length) % FLOWER_COLORS.length;
+      color = arr.length % FLOWER_COLORS.length;
     }
-    db.flowers.push({
-      id: 'f' + Date.now(),
+    arr.push({
+      id: (kind === 'animal' ? 'a' : 'f') + Date.now(),
+      kind,
       name,
       photo: pendingPhotoData || '',
       notes: document.getElementById('input-notes').value.trim(),
@@ -869,7 +989,7 @@ function submitFlower() {
   }
 
   saveData();
-  renderFlowers();
+  renderGrid();
   closeModal();
 }
 
@@ -899,14 +1019,81 @@ function ctxEdit() {
 
 function ctxDelete() {
   closeCtxMenu();
-  const flower = db.flowers.find(f => f.id === ctxFlowerId);
+  const flower = findItem(ctxFlowerId);
   if (!flower) return;
   if (!confirm(`Delete "${flower.name}"? This will also remove all its sightings.`)) return;
-  db.flowers = db.flowers.filter(f => f.id !== ctxFlowerId);
-  db.sightings = db.sightings.filter(s => s.flower_id !== ctxFlowerId);
+  if (flower.kind === 'animal') {
+    db.animals = db.animals.filter(a => a.id !== ctxFlowerId);
+  } else {
+    db.flowers = db.flowers.filter(f => f.id !== ctxFlowerId);
+  }
+  db.sightings = db.sightings.filter(s => (s.item_id || s.flower_id) !== ctxFlowerId);
   saveData();
-  renderFlowers();
-  showToast('Flower deleted');
+  renderGrid();
+  showToast(`${flower.kind === 'animal' ? 'Animal' : 'Flower'} deleted`);
+}
+
+// ---- SHARE / IMPORT ----
+function buildSharePayload() {
+  return JSON.stringify({ flowers: db.flowers, animals: db.animals }, null, 2);
+}
+
+async function shareItems() {
+  closeSettings();
+  const json = buildSharePayload();
+  const file = new File([json], 'nature-tracker-list.json', { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Nature Tracker list' });
+    } catch(e) {
+      if (e.name !== 'AbortError') downloadJson(json);
+    }
+  } else {
+    downloadJson(json);
+  }
+}
+
+function downloadJson(json) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = 'nature-tracker-list.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+function handleImportFile(e) {
+  const file = e.target.files[0];
+  e.target.value = ''; // reset so same file can be picked again
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!data.flowers && !data.animals) throw new Error('Unrecognised format');
+      const fCount = (data.flowers || []).length;
+      const aCount = (data.animals || []).length;
+      if (!confirm(`Import ${fCount} flower${fCount!==1?'s':''} and ${aCount} animal${aCount!==1?'s':''}? This replaces your current lists (sightings are kept).`)) return;
+      if (data.flowers) db.flowers = data.flowers;
+      if (data.animals) db.animals = data.animals;
+      saveData();
+      dismissImportBanner();
+      renderGrid();
+      showToast(`Imported ${fCount + aCount} items`);
+    } catch(err) {
+      showToast('Import failed - invalid file');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function checkImportBanner() {
+  if (localStorage.getItem('importBannerDismissed')) return;
+  document.getElementById('import-banner').classList.remove('hidden');
+}
+
+function dismissImportBanner() {
+  localStorage.setItem('importBannerDismissed', '1');
+  document.getElementById('import-banner').classList.add('hidden');
 }
 
 // ---- GITHUB SETTINGS ----
@@ -947,8 +1134,13 @@ async function pushToGitHub() {
   btn.textContent = 'Pushing...';
   btn.disabled = true;
   try {
-    const rows = ['flower_id,flower_name,date']
-      .concat(db.sightings.map(s => `${s.flower_id},"${s.flower_name.replace(/"/g,'""')}",${s.date}`))
+    const rows = ['item_id,item_name,item_type,date']
+      .concat(db.sightings.map(s => {
+        const id   = s.item_id   || s.flower_id   || '';
+        const name = (s.item_name || s.flower_name || '').replace(/"/g,'""');
+        const type = s.item_type || 'flower';
+        return `${id},"${name}",${type},${s.date}`;
+      }))
       .join('\n');
     const content = btoa(unescape(encodeURIComponent(rows)));
     const apiBase = `https://api.github.com/repos/${gh.owner}/${gh.repo}/contents/sightings.csv`;
@@ -991,11 +1183,12 @@ function escHtml(s) {
 
 // ---- KEYBOARD ----
 document.getElementById('input-name').addEventListener('keydown', e => {
-  if (e.key === 'Enter') submitFlower();
+  if (e.key === 'Enter') submitItem();
 });
 
 // ---- INIT ----
-renderFlowers();
+renderGrid();
+checkImportBanner();
 
 // Register service worker
 if ('serviceWorker' in navigator) {

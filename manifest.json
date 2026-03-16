@@ -1,7 +1,7 @@
 {
-  "name": "Flower Tracker",
-  "short_name": "Flowers",
-  "description": "Track wildflower sightings by season",
+  "name": "Nature Tracker",
+  "short_name": "Nature",
+  "description": "Track wildflower and wildlife sightings by season",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
